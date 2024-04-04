@@ -1,0 +1,64 @@
+name: quickstart-react-template build, test & deploy
+
+on:
+  push:
+  pull_request:
+    types: [opened]
+
+jobs:
+  build:
+    runs-on: self-hosted-ubuntu-cdhb
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node Action
+        uses: actions/setup-node@v3
+        with:
+          node-version: 14
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install Project Dependencies
+        run: npm install
+
+      - name: Run Linting
+        run: npm run lint
+
+      - name: Run Test
+        run: npm test
+
+  deploy_to_dev:
+    if: startsWith(github.ref, 'refs/heads/develop') || startsWith(github.ref, 'refs/tags/develop') # eg: develop to run scan for develop branch
+    uses: ./.github/workflows/deployment.yml
+    needs: build
+    with:
+      environment: "dev"
+    secrets: inherit
+
+  checkmarx_scan:
+    if: startsWith(github.ref, 'refs/heads/sast/')
+    needs: build
+    uses: CognizantCodeHub/QuickStart-Security-Scans-Workflows/.github/workflows/checkmarx_scan.yml@main
+    with:
+      ProjectName: ${{ github.event.repository.name }}
+    secrets: inherit
+
+  blackduck_scan:
+    if: startsWith(github.ref, 'refs/heads/oss/')
+    needs: build
+    uses: CognizantCodeHub/QuickStart-Security-Scans-Workflows/.github/workflows/node_blackduck_scan.yml@main
+    with:
+      ProjectName: ${{ github.event.repository.name }}
+      NodeVersion: "14"
+      JavaVersion: "17"
+    secrets: inherit
+
+  sonar_scan:
+    if: startsWith(github.ref, 'refs/heads/sonar/')
+    needs: build
+    uses: CognizantCodeHub/QuickStart-Security-Scans-Workflows/.github/workflows/node_sonar_scan.yml@main
+    with:
+      ProjectName: ${{ github.event.repository.name }}
+      NodeVersion: "14"
+    secrets: inherit

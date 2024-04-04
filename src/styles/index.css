@@ -1,0 +1,10 @@
+@font-face {
+    font-family: 'Cognizant Sans';
+    src: local('Cognizant Sans'),url("../assets/fonts/CognizantSans-Regular.ttf") format("truetype");
+}
+html,body{
+    margin: 0;
+    font-family: "Roboto", Helvetica Neue, HelveticaNeue, Helvetica, sans-serif !important;
+    height: 100%;
+}
+

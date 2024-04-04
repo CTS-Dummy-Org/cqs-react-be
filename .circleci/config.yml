@@ -1,0 +1,215 @@
+version: 2.1
+jobs:
+  build:
+    working_directory: ~/app/build
+    environment:
+      BUILD_CMD: build:dev
+    docker:
+      - image: cimg/node:14.19.1-browsers
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1.1-dependencies-{{ checksum "package.json" }}
+            - v1.1-dependencies-
+      - run:
+          name: install-npm
+          command: npm install
+      - save_cache:
+          key: v1.1-dependencies-{{ checksum "package.json" }}
+          paths:
+            - node_modules
+      - run:
+          name: lint
+          command: npm run lint
+      - run:
+          name: test
+          command: npm run test
+      - run:
+          name: build
+          command: ./.circleci/build.sh $BUILD_CMD
+        # Persist the specified paths (workspace/echo-output) into the workspace for use in downstream job.
+      - persist_to_workspace:
+          root: workspace
+          # Must be relative path from root
+          paths:
+            - env_exports
+
+  checkmarx_scan:
+    docker:
+      - image: codehub-docker.jfrog.io/devops-checkmarx:latest
+        auth:
+          username: $ARTIFACTORY_USER
+          password: $ARTIFACTORY_TOKEN
+    working_directory: ~/app
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: Start the Checkmarx scan
+          command: |
+            /opt/CxConsolePlugin/runCxConsole.sh Scan -v \
+            -CxServer $CHECKMARX_SERVER \
+            -Cxuser $CHECKMARX_USER \
+            -CxPassword $CHECKMARX_PASSWORD \
+            -ProjectName "CxServer\Acc-IPReady\\$CIRCLE_PROJECT_REPONAME" \
+            -LocationType folder \
+            -LocationPath ~/app \
+            -Preset "Cognizant Default Preset" \
+            -executepackagedependency \
+            -ReportPDF ~/app/report/$CIRCLE_PROJECT_REPONAME.pdf
+      - store_artifacts:
+          path: ~/app/report
+
+  blackduck_scan:
+    docker:
+      - image: cimg/openjdk:11.0.11-node
+    working_directory: ~/app
+    environment:
+      COMMIT_ID: $(echo $CIRCLE_SHA1 | cut -c1-7)
+    steps:
+      - checkout
+      - attach_workspace:
+          at: workspace
+      - run:
+          name: install npm packages
+          command: npm install
+      - run:
+          name: Start the Synopsys Detect scan
+          command: |
+            bash <(curl -s -L "${SYNOPSIS_URL}") \
+            --blackduck.url=$BLACKDUCK_URL \
+            --blackduck.api.token=$BLACKDUCK_TOKEN \
+            --detect.project.name="$CIRCLE_PROJECT_REPONAME.github" \
+            --detect.project.version.name="ver.$CIRCLE_BUILD_NUM.$COMMIT_ID" \
+            --blackduck.trust.cert=true \
+            --detect.timeout=3600 \
+            --detect.detector.search.depth=0 \
+            --detect.npm.path=/usr/bin/npm \
+            --detect.npm.node.path=/usr/bin/node \
+            --detect.detector.search.continue=true \
+            --logging.level.com.synopsys.integration=DEBUG \
+            --detect.risk.report.pdf=true \
+            --detect.risk.report.pdf.path="report" \
+            --detect.blackduck.signature.scanner.snippet.matching=SNIPPET_MATCHING \
+            --detect.excluded.directories=.git
+      - store_artifacts:
+          path: ~/app/report
+
+  sonarqube_scan:
+    docker:
+      - image: sonarsource/sonar-scanner-cli:latest
+    working_directory: ~/app
+    steps:
+      - checkout
+      - attach_workspace:
+          at: workspace
+      - run:
+          name: Sonar scan
+          command: |
+            sonar-scanner \
+              -Dsonar.projectKey="$CIRCLE_PROJECT_REPONAME" \
+              -Dsonar.sources=. \
+              -Dsonar.host.url=$SONAR_HOST_URL \
+              -Dsonar.login=$SONAR_TOKEN
+            wget https://github.com/cnescatlab/sonar-cnes-report/releases/download/4.1.3/sonar-cnes-report-4.1.3.jar -O sonar-cnes-report.jar
+            java -jar sonar-cnes-report.jar -t $SONAR_TOKEN -s $SONAR_HOST_URL -p $CIRCLE_PROJECT_REPONAME -o reports/
+            mkdir ./reports/rpt
+            cp ./reports/*report* ./reports/rpt
+      - store_artifacts:
+          path: ~/app/reports/rpt
+
+  deploy_to_dev: &deploy_to_dev
+    working_directory: ~/app/build
+    environment:
+      BUILD_CMD: build:dev
+      DEPLOY_ENV: dev
+    docker:
+      - image: cimg/node:14.19.1-browsers
+    steps:
+      #for deployment scipts
+      - checkout
+      - attach_workspace:
+          # Must be absolute path or relative path from working_directory
+          at: workspace
+      - run:
+          name: install-npm
+          command: npm install
+      - run:
+          name: Build for Environment
+          command: |
+            #source $BASH_ENV
+            #env
+            echo "export REACT_APP_BP_API_URL=$REACT_APP_BP_API_URL" >> $BASH_ENV
+            echo "export REACT_APP_CLIENT_ROOT=$REACT_APP_CLIENT_ROOT_DEV" >> $BASH_ENV
+            echo "export REACT_APP_STSAUTHORITY=$REACT_APP_STSAUTHORITY_DEV" >> $BASH_ENV
+            echo "export REACT_APP_CLIENT_ID=$REACT_APP_CLIENT_ID_DEV" >> $BASH_ENV
+            echo "export REACT_APP_REDIRECT_URI=$REACT_APP_REDIRECT_URI_DEV" >> $BASH_ENV
+            echo "export REACT_APP_ISSUER=$REACT_APP_ISSUER_DEV" >> $BASH_ENV
+            echo "export REACT_APP_JWKS=$REACT_APP_JWKS_DEV" >> $BASH_ENV
+            echo "export REACT_APP_USER_POOL_DOMAIN=$REACT_APP_USER_POOL_DOMAIN_DEV" >> $BASH_ENV
+            source $BASH_ENV
+            ./.circleci/build.sh $BUILD_CMD
+      - deploy:
+          name: Deploy Frontend in Cloud infra
+          command: |
+            #echo $(cat workspace/env_exports)
+            #source workspace/env_exports
+            ./.circleci/setup_dependencies.sh $ENV
+            ./.circleci/deploy.sh $ENV
+
+workflows:
+  version: 2
+  build_and_deploy:
+    jobs:
+      - build
+      - deploy_to_dev:
+          context:
+            - Codehub-Common
+            - qs-sandbox
+          requires:
+            - build
+          filters:
+            branches:
+              only:
+                - develop
+                - main
+      - checkmarx_scan:
+          context:
+            - Codehub-Common
+            - Artifactory
+          requires:
+            - build
+          filters:
+            branches:
+              only:
+                - /sast\/.*/
+                - /scan\/.*/ # follow branching conventions matching the regex
+                  # eg: scan/1, scan/prod
+                  # to run sast scan
+      - blackduck_scan:
+          context:
+            - Codehub-Common
+            - Artifactory
+          requires:
+            - build
+          filters:
+            branches:
+              only:
+                - /oss\/.*/
+                - /scan\/.*/ # follow branching conventions matching the regex
+                  # eg: scan/1, scan/prod
+                  # to run oss scan
+      - sonarqube_scan:
+          context:
+            - Codehub-Common
+            - Artifactory
+          requires:
+            - build
+          filters:
+            branches:
+              only:
+                - /sonar\/.*/
+                - /scan\/.*/ # follow branching conventions matching the regex
+                  # eg: scan/1, scan/prod
+                  # to run sonar scan

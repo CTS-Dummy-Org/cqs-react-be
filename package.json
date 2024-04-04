@@ -1,0 +1,96 @@
+{
+    "name": "quickstart",
+    "version": "0.1.0",
+    "private": true,
+    "dependencies": {
+        "@emotion/react": "^11.10.6",
+        "@emotion/styled": "^11.10.6",
+        "@mui/icons-material": "^5.11.11",
+        "@mui/material": "^5.11.13",
+        "@mui/styled-engine-sc": "5.14.12",
+        "@mui/styles": "^5.14.18",
+        "@testing-library/jest-dom": "^5.16.5",
+        "@testing-library/react": "^12.1.2",
+        "@testing-library/user-event": "^13.5.0",
+        "@types/axios": "^0.14.0",
+        "@types/jest": "^27.4.3",
+        "@types/material-ui": "^0.21.12",
+        "@types/node": "^18.15.3",
+        "@types/react": "^18.0.28",
+        "@types/react-dom": "^18.0.9",
+        "@types/react-router": "^5.1.20",
+        "axios": "^0.21.1",
+        "oidc-client": "^1.11.5",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "react-router": "^5.2.0",
+        "react-router-dom": "^6.6.1",
+        "react-scripts": "^5.0.1",
+        "styled-components": "^5.3.1",
+        "tslib": "^2.2.0",
+        "typescript": "^4.5.4",
+        "web-vitals": "^2.1.2"
+    },
+    "scripts": {
+        "start": "react-scripts start --watch",
+        "build": "INLINE_RUNTIME_CHUNK=false react-scripts build",
+        "build:dev": "REACT_APP_NODE_ENV=dev INLINE_RUNTIME_CHUNK=false react-scripts build",
+        "test": "cross-env CI=true react-scripts test --env=jsdom --maxWorkers=2 --testResultsProcessor=\"jest-junit\" --coverage",
+        "eject": "react-scripts eject",
+        "lint": "eslint src/**/*.tsx",
+        "lint:fix": "eslint src/**/*.tsx --fix",
+        "prettier": "prettier --write --config .prettierrc src/**/*.{ts,tsx}",
+        "precommit": "lint-staged"
+    },
+    "eslintConfig": {
+        "extends": [
+            "react-app",
+            "react-app/jest"
+        ]
+    },
+    "browserslist": {
+        "production": [
+            ">0.2%",
+            "not dead",
+            "not op_mini all"
+        ],
+        "development": [
+            "last 1 chrome version",
+            "last 1 firefox version",
+            "last 1 safari version"
+        ]
+    },
+    "devDependencies": {
+        "@types/react-router-dom": "^5.1.7",
+        "@types/styled-components": "^5.1.9",
+        "@typescript-eslint/eslint-plugin": "^5.21.0",
+        "@typescript-eslint/parser": "^5.21.0",
+        "cross-env": "^7.0.3",
+        "eslint": "^8.1.0",
+        "eslint-plugin-react": "^7.29.4",
+        "husky": "^4.3.0",
+        "jest-junit": "^12.0.0",
+        "lint-staged": "^10.5.1",
+        "prettier": "^2.2.1"
+    },
+    "lint-staged": {
+        "{src,__{test|mocks}__}/**/*.tsx": [
+            "npm run lint",
+            "git add"
+        ]
+    },
+    "husky": {
+        "hooks": {
+            "pre-commit": "npm run lint"
+        }
+    },
+    "jest": {
+        "collectCoverageFrom": [
+            "src/**/*.tsx",
+            "!src/index.tsx",
+            "!/node_modules/",
+            "!src/features/**/index.tsx",
+            "!src/utils/**/index.tsx"
+        ]
+    }
+}

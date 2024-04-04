@@ -1,0 +1,77 @@
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    environment: ${{ inputs.environment }}
+    runs-on: self-hosted-ubuntu-cdhb
+    env:
+      AWS_EC2_METADATA_DISABLED: true
+      AWS_S3_DEPLOY_BUCKET_NAME: ${{ vars.AWS_S3_DEPLOY_BUCKET_NAME }}
+      DEPLOY_TO_ECS: ${{ vars.DEPLOY_TO_ECS }}
+      QUICKSTARTPROTYPESECRETS_AWS_ACCESS_KEY_ID_DEV_QA: ${{ secrets.QUICKSTART_PROTOTYPE_SECRETS_AWS_ACCESS_KEY_ID_DEV_QA }}
+      QUICKSTARTPROTYPESECRETS_AWS_SECRET_ACCESS_KEY_DEV_QA: ${{ secrets.QUICKSTART_PROTOTYPE_SECRETS_AWS_SECRET_ACCESS_KEY_DEV_QA }}
+      QUICKSTARTPROTYPESECRETS_AWS_ACCESS_KEY_ID_STAGE_PROD: ${{ secrets.QUICKSTARTPROTYPESECRETS_AWS_ACCESS_KEY_ID_STAGE_PROD }}
+      QUICKSTARTPROTYPESECRETS_AWS_SECRET_ACCESS_KEY_STAGE_PROD: ${{ secrets.QUICKSTARTPROTYPESECRETS_AWS_SECRET_ACCESS_KEY_STAGE_PROD }}
+      REACT_APP_BP_API_URL: ${{ vars.REACT_APP_BP_API_URL }}
+      REACT_APP_CLIENT_ROOT: ${{ vars.REACT_APP_CLIENT_ROOT }}
+      RELATIVE_URL: ${{ vars.RELATIVE_URL }}
+      PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+      BUILD_CMD: build:dev
+      ENV: ${{ vars.ENV }}
+      CLOUD_TYPE: ${{ vars.CLOUD_TYPE }}
+      ASSET_CODE: ${{ vars.ASSET_CODE }}
+      DEPLOY_TO_AKS: ${{ vars.DEPLOY_TO_AKS }}
+      DEPLOY_AKS_TEARDOWN: ${{ vars.DEPLOY_AKS_TEARDOWN }}
+
+      # ENV for PROD
+      AZURE_CDN_STORAGE_ACCOUNT: ${{ vars.AZURE_STORAGE_ACCOUNT_NAME }}   
+      AZURE_BLOB_CONTAINER_NAME: ${{ vars.AZURE_BLOB_CONTAINER_NAME }}   
+
+      QUICKSTART_PROTOTYPE_SECRETS_AZURE_TENANT_ID_DEV_QA: ${{ secrets.QUICKSTART_PROTOTYPE_SECRETS_AZURE_TENANT_ID_DEV_QA }}
+      QUICKSTART_PROTOTYPE_SECRETS_AZURE_CLIENT_ID_DEV_QA: ${{ secrets.QUICKSTART_PROTOTYPE_SECRETS_AZURE_CLIENT_ID_DEV_QA }}
+      QUICKSTART_PROTOTYPE_SECRETS_AZURE_CLIENT_SECRET_DEV_QA: ${{ secrets.QUICKSTART_PROTOTYPE_SECRETS_AZURE_CLIENT_SECRET_DEV_QA }}
+      QUICKSTART_PROTOTYPE_SECRETS_AZURE_SUBSCRIPTION_ID_DEV_QA: ${{ secrets.QUICKSTART_PROTOTYPE_SECRETS_AZURE_SUBSCRIPTION_ID_DEV_QA }}
+
+      QUICKSTART_PROTOTYPE_SECRETS_AZURE_TENANT_ID_STAGE_PROD: ${{ secrets.QUICKSTART_PROTOTYPE_SECRETS_AZURE_TENANT_ID_STAGE_PROD }}
+      QUICKSTART_PROTOTYPE_SECRETS_AZURE_CLIENT_ID_STAGE_PROD: ${{ secrets.QUICKSTART_PROTOTYPE_SECRETS_AZURE_CLIENT_ID_STAGE_PROD }}
+      QUICKSTART_PROTOTYPE_SECRETS_AZURE_CLIENT_SECRET_STAGE_PROD: ${{ secrets.QUICKSTART_PROTOTYPE_SECRETS_AZURE_CLIENT_SECRET_STAGE_PROD }}
+      QUICKSTART_PROTOTYPE_SECRETS_AZURE_SUBSCRIPTION_ID_STAGE_PROD: ${{ secrets.QUICKSTART_PROTOTYPE_SECRETS_AZURE_SUBSCRIPTION_ID_STAGE_PROD }}
+
+      AZURE_CDN_CONNECT_STRING_DEV: ${{ secrets.QUICKSTART_AZURE_CDN_CONNECT_STRING_DEV }}
+      AZURE_CDN_CONNECT_STRING_QA: ${{ secrets.QUICKSTART_AZURE_CDN_CONNECT_STRING_QA }}
+      AZURE_CDN_CONNECT_STRING_STAGE: ${{ secrets.QUICKSTART_AZURE_CDN_CONNECT_STRING_STAGE }}
+      AZURE_CDN_CONNECT_STRING_PROD: ${{ secrets.QUICKSTART_AZURE_CDN_CONNECT_STRING_PROD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node Action
+        uses: actions/setup-node@v3
+        with:
+          node-version: 14
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install Project Dependencies
+        run: npm install
+
+      - name: Build for Environment
+        run: .github/workflows/build.sh ${{ env.BUILD_CMD }}
+
+      - name: Setup Dependencies
+        run: .github/workflows/setup_dependencies.sh ${{ env.ENV }}
+
+      - name: Deploy Frontend in Cloud infra
+        run: .github/workflows/deploy.sh
+
+      # - name: Persist specified paths to workspace
+      #   uses: actions/upload-artifact@v3.1.0
+      #   with:
+      #     path: ${{ github.workspace }}/workspace/env_exports
